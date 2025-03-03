@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 import { PodcastRequest, PodcastResponse } from '../types';
 import { Alert, AlertDescription } from './ui/alert';
 
+
 export function PodcastForm() {
   const {
     teams,
@@ -26,6 +27,7 @@ export function PodcastForm() {
     generatePodcast,
   } = useMLBApi();
 
+  // Simplified to just 2 steps: team selection and configuration
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<PodcastRequest>({
     team: '',
@@ -37,9 +39,11 @@ export function PodcastForm() {
   });
   const [generatedPodcast, setGeneratedPodcast] = useState<PodcastResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [playersLoaded, setPlayersLoaded] = useState(false);
-  const [gamesLoaded, setGamesLoaded] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null); // Local error state for component-specific errors
+  const [dataLoading, setDataLoading] = useState({
+    players: false,
+    games: false
+  });
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Only fetch teams on initial component mount
   useEffect(() => {
@@ -48,49 +52,36 @@ export function PodcastForm() {
     });
   }, [fetchTeams]);
 
-  // Handle team selection - only fetch when moving to step 1
+  // Handle team selection - now this is the main required input
   const handleTeamSelect = (team: string) => {
     setFormData(prev => ({ ...prev, team }));
-    setPlayersLoaded(false);
-    setGamesLoaded(false);
-    setLocalError(null); // Clear any previous errors
+    setDataLoading({
+      players: true,
+      games: true
+    });
+    setLocalError(null);
     setCurrentStep(1);
+    
+    // Fetch players and games data after team selection
+    fetchPlayers(team)
+      .finally(() => {
+        setDataLoading(prev => ({ ...prev, players: false }));
+      });
+    
+    // Fetch last game and recent games data
+    Promise.all([
+      fetchLastGame(team),
+      fetchRecentGames(team)
+    ])
+    .finally(() => {
+      setDataLoading(prev => ({ ...prev, games: false }));
+    });
   };
-
-  // Fetch player data only when we're on step 1 and players aren't already loaded
-  useEffect(() => {
-    if (currentStep === 1 && formData.team && !playersLoaded) {
-      fetchPlayers(formData.team)
-        .then(() => setPlayersLoaded(true))
-        .catch(err => {
-          setLocalError(`Failed to fetch players: ${err.message}`);
-        });
-    }
-  }, [currentStep, formData.team, fetchPlayers, playersLoaded]);
-
-  // Fetch game data only when we're on step 1 and games aren't already loaded
-  useEffect(() => {
-    if (currentStep === 1 && formData.team && !gamesLoaded) {
-      // We'll handle each call separately to prevent one failure from blocking the other
-      fetchLastGame(formData.team)
-        .catch(err => {
-          console.error(`Error fetching last game: ${err.message}`);
-          // We don't want to block the entire flow for this error
-        });
-      
-      fetchRecentGames(formData.team)
-        .then(() => setGamesLoaded(true))
-        .catch(err => {
-          console.error(`Error fetching recent games: ${err.message}`);
-          // Still mark games as loaded even if there was an error to prevent infinite retries
-          setGamesLoaded(true);
-        });
-    }
-  }, [currentStep, formData.team, fetchLastGame, fetchRecentGames, gamesLoaded]);
 
   // Update opponent and game_type when last game is loaded
   useEffect(() => {
     if (lastGame && currentStep === 1) {
+      // Default to the last game's information
       setFormData(prev => ({
         ...prev,
         opponent: lastGame.opponent || prev.opponent,
@@ -114,11 +105,32 @@ export function PodcastForm() {
   const handleGeneratePodcast = async () => {
     setIsGenerating(true);
     setLocalError(null);
+    
+    // Validate required fields before submitting
+    if (!formData.team) {
+      setLocalError("Team selection is required");
+      setIsGenerating(false);
+      return;
+    }
+    
+    if (!formData.language) {
+      setLocalError("Language selection is required");
+      setIsGenerating(false);
+      return;
+    }
+    
+    // If no game/opponent is selected, use the last game
+    const requestData = {
+      ...formData,
+      opponent: formData.opponent || (lastGame?.opponent || ''),
+      game_type: formData.game_type || (lastGame?.type || 'Regular Season')
+    };
+    
     try {
-      const result = await generatePodcast(formData);
+      const result = await generatePodcast(requestData);
       if (result) {
         setGeneratedPodcast(result);
-        setCurrentStep(3);
+        setCurrentStep(2); // Go to the audio player step
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate podcast';
@@ -128,11 +140,7 @@ export function PodcastForm() {
     }
   };
 
-  const handleNextStep = () => {
-    setCurrentStep(prev => prev + 1);
-  };
-
-  const handlePrevStep = () => {
+  const handleBack = () => {
     setCurrentStep(prev => prev - 1);
   };
 
@@ -147,58 +155,55 @@ export function PodcastForm() {
           />
         );
       case 1:
-        // Show loading state while data is being fetched
-        { const isLoadingData = !playersLoaded || loading;
         return (
           <>
-            <PlayerSelection
-              players={players}
-              loading={isLoadingData}
-              onSelectPlayers={handlePlayerSelect}
-            />
-            <GameSelection
-              lastGame={lastGame}
-              recentGames={recentGames}
-              loading={!gamesLoaded || loading}
-              onSelectGame={handleGameSelect}
-            />
-            <LanguageSelection
-              onSelectLanguage={handleLanguageSelect}
-            />
-            <div className="flex justify-between mt-4">
-              <Button
-                onClick={handlePrevStep}
-                variant="outline"
-                className="bg-transparent text-white border-gray-700 hover:bg-gray-800"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleNextStep}
-                className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={formData.players.length === 0 || isLoadingData}
-              >
-                Next
-              </Button>
+            <div className="space-y-4">
+              {/* Required field */}
+              <div>
+                <h3 className="text-sm text-white font-medium mb-2 flex items-center">
+                  <span className="text-red-500 mr-1">*</span> Required Field
+                </h3>
+                <LanguageSelection
+                  onSelectLanguage={handleLanguageSelect}
+                />
+              </div>
+              
+              {/* Optional fields */}
+              <div>
+                <h3 className="text-sm text-white font-medium mb-2">Optional Fields</h3>
+                
+                <div className="space-y-4">
+                  <GameSelection
+                    lastGame={lastGame}
+                    recentGames={recentGames}
+                    loading={dataLoading.games || loading}
+                    onSelectGame={handleGameSelect}
+                  />
+                  
+                  <PlayerSelection
+                    players={players}
+                    loading={dataLoading.players || loading}
+                    onSelectPlayers={handlePlayerSelect}
+                  />
+                </div>
+              </div>
             </div>
-          </>
-        ); }
-      case 2:
-        return (
-          <>
-            <div className="rounded-lg bg-gray-800 p-4 text-white">
+            
+            <div className="rounded-lg bg-gray-800 p-4 text-white mt-6">
               <h3 className="text-lg font-semibold mb-2">Podcast Summary</h3>
               <div className="space-y-2">
                 <p><span className="font-medium">Team:</span> {formData.team}</p>
-                <p><span className="font-medium">Players:</span> {formData.players.join(', ')}</p>
-                <p><span className="font-medium">Opponent:</span> {formData.opponent}</p>
-                <p><span className="font-medium">Game Type:</span> {formData.game_type}</p>
                 <p><span className="font-medium">Language:</span> {formData.language}</p>
+                <p><span className="font-medium">Game:</span> {formData.opponent ? `vs ${formData.opponent}` : 'Last game'}</p>
+                {formData.players.length > 0 && (
+                  <p><span className="font-medium">Players:</span> {formData.players.join(', ')}</p>
+                )}
               </div>
             </div>
+            
             <div className="flex justify-between mt-4">
               <Button
-                onClick={handlePrevStep}
+                onClick={handleBack}
                 variant="outline"
                 className="bg-transparent text-white border-gray-700 hover:bg-gray-800"
               >
@@ -207,7 +212,7 @@ export function PodcastForm() {
               <Button
                 onClick={handleGeneratePodcast}
                 className="bg-blue-600 text-white hover:bg-blue-700"
-                disabled={isGenerating}
+                disabled={isGenerating || !formData.language}
               >
                 {isGenerating ? (
                   <div className="flex items-center">
@@ -221,12 +226,12 @@ export function PodcastForm() {
             </div>
           </>
         );
-      case 3:
+      case 2:
         return generatedPodcast ? (
           <>
             <AudioPlayer
-              audioUrl={generatedPodcast.url}
-              title={generatedPodcast.title}
+              audioUrl={generatedPodcast.audio_url || generatedPodcast.url}
+              title={`MLB Podcast: ${formData.team}`}
             />
             <Button
               onClick={() => setCurrentStep(0)}
@@ -241,22 +246,22 @@ export function PodcastForm() {
     }
   };
 
-  // Use either the global error from useMLBApi or the local error
+  // Display either global or local error
   const displayError = error || localError;
 
   return (
     <div className="w-full max-w-md mx-auto space-y-4 pb-24">
       <div className="mb-2">
-        {currentStep <= 2 && (
+        {currentStep <= 1 && (
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-gray-400">
-              Step {currentStep + 1} of 3
+              Step {currentStep + 1} of 2
             </div>
             <div className="flex space-x-1">
-              {[0, 1, 2].map((step) => (
+              {[0, 1].map((step) => (
                 <div
                   key={step}
-                  className={`h-2 w-8 rounded-full ${
+                  className={`h-2 w-12 rounded-full ${
                     step <= currentStep ? 'bg-blue-600' : 'bg-gray-700'
                   }`}
                 />

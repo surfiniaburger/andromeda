@@ -1,11 +1,11 @@
 import { useState,  useRef, useCallback } from 'react';
-import { Team, Player, Game, PodcastResponse, PodcastRequest } from '../types';
+import { Team, Game, PodcastResponse, PodcastRequest } from '../types';
 
 const API_BASE_URL = 'https://mlb-strings-1011675918473.us-central1.run.app/api/v1';
 
 export const useMLBApi = () => {
   const [teams, setTeams] = useState<Team[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
+  const [players, setPlayers] = useState<string[]>([]);
   const [lastGame, setLastGame] = useState<Game | null>(null);
   const [recentGames, setRecentGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,7 +21,7 @@ export const useMLBApi = () => {
   // Cache references to prevent duplicate API calls
   const cache = useRef<{
     teams: Team[] | null;
-    players: Record<string, Player[]>;
+    players: Record<string, string[]>;
     lastGame: Record<string, Game>;
     recentGames: Record<string, Game[]>;
   }>({
@@ -152,7 +152,7 @@ export const useMLBApi = () => {
       addDebugInfo(endpoint, status, responseData);
       
       // Handle both possible response formats
-      let playersArray: Player[];
+      let playersArray: string[];
       if (Array.isArray(responseData)) {
         playersArray = responseData;
       } else if (responseData && typeof responseData === 'object') {
@@ -352,17 +352,47 @@ const fetchRecentGames = useCallback(async (teamName: string, forceRefresh = fal
       console.log('Podcast data:', responseData);
       addDebugInfo(endpoint, status, responseData);
       
-      // Handle possible nested response
+      // Transform the response data to match expected PodcastResponse format
       let podcastData: PodcastResponse;
+      
       if (responseData && typeof responseData === 'object') {
-        if (responseData.data && responseData.data.podcast) {
-          podcastData = responseData.data.podcast;
-        } else {
-          podcastData = responseData;
+        // Handle case where audio_url is directly in responseData.data
+        if (responseData.data && responseData.data.audio_url) {
+          podcastData = {
+            url: responseData.data.audio_url,
+            audio_url: responseData.data.audio_url, // Keep original field too
+            title: `MLB Podcast: ${requestData.team}`,
+            message: responseData.data.message || responseData.message || "Podcast generated successfully",
+            ...responseData.data // Include any other fields from the response
+          };
+        } 
+        // Handle case where response has nested podcast object
+        else if (responseData.data && responseData.data.podcast) {
+          const nested = responseData.data.podcast;
+          podcastData = {
+            url: nested.audio_url || nested.url,
+            audio_url: nested.audio_url || nested.url,
+            title: nested.title || `MLB Podcast: ${requestData.team}`,
+            message: nested.message || responseData.message || "Podcast generated successfully",
+            ...nested
+          };
+        } 
+        // Default case: assume responseData is the podcast object
+        else {
+          podcastData = {
+            url: responseData.audio_url || responseData.url,
+            audio_url: responseData.audio_url || responseData.url,
+            title: responseData.title || `MLB Podcast: ${requestData.team}`,
+            message: responseData.message || "Podcast generated successfully",
+            ...responseData
+          };
         }
       } else {
         throw new Error('Invalid response format');
       }
+      
+      // Add debug log to see final transformed data
+      console.log('Transformed podcast data for UI:', podcastData);
       
       setPodcast(podcastData);
       return podcastData;

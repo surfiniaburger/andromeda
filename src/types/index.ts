@@ -30,5 +30,7 @@ export interface Team {
   export interface PodcastResponse {
     url: string;
     duration: number;
-    title: string;
+    title?: string;
+    audio_url?: string;
+    message?: string;
   }
