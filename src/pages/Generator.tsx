@@ -1,11 +1,11 @@
-// src/pages/Generator.tsx - add support for easier error debugging
+// src/pages/Generator.tsx
 import { PodcastForm } from '../components/PodcastForm';
 import { useState } from 'react';
 import { Button } from '../components/ui/button';
 
 export function Generator() {
   const [testModeActive, setTestModeActive] = useState(false);
-
+  
   const handleTestMode = () => {
     setTestModeActive(!testModeActive);
     if (!testModeActive) {
@@ -14,11 +14,10 @@ export function Generator() {
       console.log("GET /api/v1/teams");
       console.log("GET /api/v1/teams/{team_name}/players");
       console.log("GET /api/v1/teams/{team_name}/games/last");
-      console.log("GET /api/v1/teams/{team_name}/games/history?count=5");
       console.log("POST /api/v1/podcast");
     }
   };
-
+  
   return (
     <div className="min-h-screen bg-gray-950 py-8 px-4">
       <div className="mb-6 text-center">
@@ -27,8 +26,8 @@ export function Generator() {
             <span className="mr-2">💎🏃</span> Gem Run
           </h1>
           <Button 
-            variant="ghost" 
-            size="sm" 
+            variant="ghost"
+            size="sm"
             onClick={handleTestMode}
             className="ml-2 text-xs text-gray-500 hover:text-gray-300"
           >

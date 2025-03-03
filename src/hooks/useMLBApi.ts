@@ -1,4 +1,4 @@
-import { useState,  useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Team, Game, PodcastResponse, PodcastRequest } from '../types';
 
 const API_BASE_URL = 'https://mlb-strings-1011675918473.us-central1.run.app/api/v1';
@@ -7,7 +7,6 @@ export const useMLBApi = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [players, setPlayers] = useState<string[]>([]);
   const [lastGame, setLastGame] = useState<Game | null>(null);
-  const [recentGames, setRecentGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [podcast, setPodcast] = useState<PodcastResponse | null>(null);
@@ -23,12 +22,10 @@ export const useMLBApi = () => {
     teams: Team[] | null;
     players: Record<string, string[]>;
     lastGame: Record<string, Game>;
-    recentGames: Record<string, Game[]>;
   }>({
     teams: null,
     players: {},
-    lastGame: {},
-    recentGames: {}
+    lastGame: {}
   });
 
   // Track if API calls are in progress
@@ -240,78 +237,6 @@ export const useMLBApi = () => {
       pendingRequests.current[cacheKey] = false;
     }
   }, [addDebugInfo]);
-
-// This is just the fetchRecentGames function that needs to be updated in useMLBApi.ts
-const fetchRecentGames = useCallback(async (teamName: string, forceRefresh = false) => {
-    // Return cached data if available and not forcing refresh
-    const cacheKey = `recentGames-${teamName}`;
-    if (!forceRefresh && cache.current.recentGames[teamName]) {
-      return cache.current.recentGames[teamName];
-    }
-  
-    // Prevent duplicate requests
-    if (pendingRequests.current[cacheKey]) {
-      console.log(`Recent games request for ${teamName} already in progress`);
-      return null;
-    }
-  
-    pendingRequests.current[cacheKey] = true;
-    setLoading(true);
-    setError(null);
-    const endpoint = `${API_BASE_URL}/teams/${teamName}/games/history?count=5`;
-    
-    try {
-      console.log(`Fetching: ${endpoint}`);
-      const response = await fetch(endpoint);
-      const status = response.status;
-      console.log(`Response status: ${status}`);
-      
-      if (!response.ok) throw new Error(`Failed to fetch recent games: ${status}`);
-      
-      const responseData = await response.json();
-      console.log('Recent games data:', responseData);
-      addDebugInfo(endpoint, status, responseData);
-      
-      // Fixed nested response format handling
-      let gamesArray: Game[];
-      if (Array.isArray(responseData)) {
-        gamesArray = responseData;
-      } else if (responseData && typeof responseData === 'object') {
-        // First check for direct 'games' array
-        if (responseData.games && Array.isArray(responseData.games)) {
-          gamesArray = responseData.games;
-        }
-        // Handle the nested structure: data > games > games
-        else if (responseData.data && responseData.data.games) {
-          if (Array.isArray(responseData.data.games)) {
-            gamesArray = responseData.data.games;
-          } else if (responseData.data.games.games && Array.isArray(responseData.data.games.games)) {
-            gamesArray = responseData.data.games.games;
-          } else {
-            throw new Error('Unexpected response format: games array not found');
-          }
-        } else {
-          throw new Error('Unexpected response format: games array not found');
-        }
-      } else {
-        throw new Error('Invalid response format');
-      }
-      
-      // Update cache and state
-      cache.current.recentGames[teamName] = gamesArray;
-      setRecentGames(gamesArray);
-      return gamesArray;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      console.error(`Error fetching recent games: ${errorMessage}`);
-      setError(errorMessage);
-      addDebugInfo(endpoint, 0, { error: errorMessage });
-      return null;
-    } finally {
-      setLoading(false);
-      pendingRequests.current[cacheKey] = false;
-    }
-  }, [addDebugInfo]);
   
   const generatePodcast = useCallback(async (requestData: PodcastRequest) => {
     setLoading(true);
@@ -413,8 +338,7 @@ const fetchRecentGames = useCallback(async (teamName: string, forceRefresh = fal
     cache.current = {
       teams: null,
       players: {},
-      lastGame: {},
-      recentGames: {}
+      lastGame: {}
     };
   }, []);
 
@@ -422,7 +346,6 @@ const fetchRecentGames = useCallback(async (teamName: string, forceRefresh = fal
     teams,
     players,
     lastGame,
-    recentGames,
     loading,
     error,
     podcast,
@@ -430,8 +353,7 @@ const fetchRecentGames = useCallback(async (teamName: string, forceRefresh = fal
     fetchTeams,
     fetchPlayers,
     fetchLastGame,
-    fetchRecentGames,
     generatePodcast,
-    clearCache, // Added method to clear cache when needed
+    clearCache
   };
 };
