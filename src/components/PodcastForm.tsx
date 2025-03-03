@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useMLBApi } from '../hooks/useMLBApi';
 import { TeamSelection } from './TeamSelection';
 import { PlayerSelection } from './PlayerSelection';
-import { GameSelection } from './GameSelection';
 import { LanguageSelection } from './LanguageSelection';
 import { AudioPlayer } from './AudioPlayer';
 import { DebugConsole } from './DebugConsole';
@@ -10,20 +9,17 @@ import { Button } from './ui/button';
 import { PodcastRequest, PodcastResponse } from '../types';
 import { Alert, AlertDescription } from './ui/alert';
 
-
 export function PodcastForm() {
   const {
     teams,
     players,
     lastGame,
-    recentGames,
     loading,
     error,
     debugInfo,
     fetchTeams,
     fetchPlayers,
     fetchLastGame,
-    fetchRecentGames,
     generatePodcast,
   } = useMLBApi();
 
@@ -40,8 +36,7 @@ export function PodcastForm() {
   const [generatedPodcast, setGeneratedPodcast] = useState<PodcastResponse | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [dataLoading, setDataLoading] = useState({
-    players: false,
-    games: false
+    players: false
   });
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -56,26 +51,19 @@ export function PodcastForm() {
   const handleTeamSelect = (team: string) => {
     setFormData(prev => ({ ...prev, team }));
     setDataLoading({
-      players: true,
-      games: true
+      players: true
     });
     setLocalError(null);
     setCurrentStep(1);
     
-    // Fetch players and games data after team selection
+    // Fetch players and last game data after team selection
     fetchPlayers(team)
       .finally(() => {
         setDataLoading(prev => ({ ...prev, players: false }));
       });
     
-    // Fetch last game and recent games data
-    Promise.all([
-      fetchLastGame(team),
-      fetchRecentGames(team)
-    ])
-    .finally(() => {
-      setDataLoading(prev => ({ ...prev, games: false }));
-    });
+    // Only fetch last game, don't fetch history
+    fetchLastGame(team);
   };
 
   // Update opponent and game_type when last game is loaded
@@ -92,10 +80,6 @@ export function PodcastForm() {
 
   const handlePlayerSelect = (players: string[]) => {
     setFormData(prev => ({ ...prev, players }));
-  };
-
-  const handleGameSelect = (opponent: string) => {
-    setFormData(prev => ({ ...prev, opponent }));
   };
 
   const handleLanguageSelect = (language: string) => {
@@ -122,6 +106,7 @@ export function PodcastForm() {
     // If no game/opponent is selected, use the last game
     const requestData = {
       ...formData,
+      timeframe: 'Last game',
       opponent: formData.opponent || (lastGame?.opponent || ''),
       game_type: formData.game_type || (lastGame?.type || 'Regular Season')
     };
@@ -173,13 +158,6 @@ export function PodcastForm() {
                 <h3 className="text-sm text-white font-medium mb-2">Optional Fields</h3>
                 
                 <div className="space-y-4">
-                  <GameSelection
-                    lastGame={lastGame}
-                    recentGames={recentGames}
-                    loading={dataLoading.games || loading}
-                    onSelectGame={handleGameSelect}
-                  />
-                  
                   <PlayerSelection
                     players={players}
                     loading={dataLoading.players || loading}
@@ -194,7 +172,7 @@ export function PodcastForm() {
               <div className="space-y-2">
                 <p><span className="font-medium">Team:</span> {formData.team}</p>
                 <p><span className="font-medium">Language:</span> {formData.language}</p>
-                <p><span className="font-medium">Game:</span> {formData.opponent ? `vs ${formData.opponent}` : 'Last game'}</p>
+                <p><span className="font-medium">Game:</span> Last game {lastGame && lastGame.opponent ? `(vs ${lastGame.opponent})` : ''}</p>
                 {formData.players.length > 0 && (
                   <p><span className="font-medium">Players:</span> {formData.players.join(', ')}</p>
                 )}
