@@ -1,6 +1,7 @@
 import { FaGithub, FaGoogle } from 'react-icons/fa'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { Button } from '../components/ui/button';
 
 export interface ISocialSignInProps {
   enabled?: boolean
@@ -33,24 +34,24 @@ export function SocialSignIn({ enabled = true, setError }: ISocialSignInProps) {
   }
   return (
     <div className=" gap-2 flex justify-between flex-wrap">
-      <button
+      <Button
         onClick={handleGoogleLogin}
         disabled={!enabled}
-        className=" min-w-fit relative flex flex-grow  justify-center rounded-md border border-transparent bg-gray-200 py-2  px-9 text-sm font-medium transition-colors hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+         className="w-full flex items-center justify-center border border-gray-700 bg-transparent text-white py-2 px-4 hover:bg-gray-800 transition-colors"
       >
         <span className="inset-y-0 left-0 flex items-center ">
           <FaGoogle className="h-7 w-7  text-gray-500 group-hover:text-gray-600" />
         </span>
-      </button>
-      <button
+      </Button>
+      <Button
         onClick={handleGithubLogin}
         disabled={!enabled}
-        className=" min-w-fit relative flex flex-grow  justify-center rounded-md border border-transparent bg-gray-200 py-2  px-9 text-sm font-medium transition-colors hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+         className="w-full flex items-center justify-center border border-gray-700 bg-transparent text-white py-2 px-4 hover:bg-gray-800 transition-colors"
       >
         <span className="inset-y-0 left-0 flex items-center ">
           <FaGithub className="h-7 w-7  text-gray-500 group-hover:text-gray-600" />
         </span>
-      </button>
+      </Button>
     </div>
   )
 }
